@@ -1,0 +1,9 @@
+{
+    "sources":[
+
+        {"name":"windows","proto" :"beats","port":50441,"tls":false,"path":"./Logs/windows.json"},
+        {"name":"windows-tls","proto" :"beats","port":50442,"tls":true,"path":"./Logs/windows.json"},
+        {"name":"test-tcp","proto" :"tcp","port":8585,"tls":false,"path":"./Logs/test.log"},
+        {"name":"test-udp","proto" :"udp","port":8686,"tls":false,"path":"./Logs/test.log"}
+    ]
+}
