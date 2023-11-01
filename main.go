@@ -31,6 +31,7 @@ var (
 	ca, cert, key *string
 	inifity       *bool
 	delay         *int64
+	threads       *int
 
 	logsMap   LogsMap = make(LogsMap)
 	tlsConfig *tls.Config
@@ -47,6 +48,7 @@ func main() {
 	sources = flag.String("s", "", "sources")
 	inifity = flag.Bool("i", false, "inifity mode")
 	delay = flag.Int64("d", 0, "delay for each turn in inifity mode (miliseconds)")
+	threads = flag.Int("t", 1, "threads count")
 	ca = flag.String("ca", "", "ca certificate")
 	cert = flag.String("cert", "", "cert certificate")
 	key = flag.String("key", "", "key certificate")
@@ -69,23 +71,26 @@ func main() {
 	}
 
 	var wg sync.WaitGroup
-	if len(incs) > 0 {
-		for _, i := range incs {
-			if log, ok := logsMap[i]; ok {
-				wg.Add(1)
-				go func(i string) {
-					defer wg.Done()
-					send(*dest, log)
-				}(i)
-			}
+	if len(incs) == 0 {
+		for k := range logsMap {
+			incs = append(incs, k)
 		}
-	} else {
-		wg.Add(1)
-		for k, v := range logsMap {
-			go func(k string, v JsonLogs) {
+	}
+
+	for _, i := range incs {
+		if log, ok := logsMap[i]; ok {
+			wg.Add(1)
+			go func(i string) {
+				// var count int
 				defer wg.Done()
-				send(*dest, v)
-			}(k, v)
+				for j := 0; j <= *threads; j++ {
+					wg.Add(1)
+					go func() {
+						defer wg.Done()
+						send(*dest, log)
+					}()
+				}
+			}(i)
 		}
 	}
 
