@@ -25,19 +25,12 @@ type JsonLogs struct {
 }
 
 type LogsMap map[string]JsonLogs
-type Field struct {
-	Key string
-	Val string
-}
 
 var (
 	dest, sources *string
 	ca, cert, key *string
 	inifity       *bool
 	delay         *int64
-	overwriteDate *bool
-	fields        *string
-	fieldsList    []Field
 
 	logsMap   LogsMap = make(LogsMap)
 	tlsConfig *tls.Config
@@ -54,8 +47,6 @@ func main() {
 	sources = flag.String("s", "", "sources")
 	inifity = flag.Bool("i", false, "inifity mode")
 	delay = flag.Int64("d", 0, "delay for each turn in inifity mode (miliseconds)")
-	overwriteDate = flag.Bool("overwrite-date", false, "overwrite date to now")
-	fields = flag.String("fields", "", "add field to log")
 	ca = flag.String("ca", "", "ca certificate")
 	cert = flag.String("cert", "", "cert certificate")
 	key = flag.String("key", "", "key certificate")
@@ -66,16 +57,6 @@ func main() {
 	var incs []string
 	if *sources != "" {
 		incs = strings.Split(*sources, ",")
-	}
-	if *fields != "" {
-		fl := strings.Split(*fields, ",")
-		for _, f := range fl {
-			kv := strings.Split(f, "=")
-			fieldsList = append(fieldsList, Field{
-				Key: kv[0],
-				Val: kv[1],
-			})
-		}
 	}
 
 	tlsConfig, err = tls_config.LoadTLSCredentials(tls_config.Config{
@@ -161,26 +142,6 @@ func sendBeatsLogs(ip string, mylog JsonLogs) {
 		}
 	}
 
-}
-
-func addFields(m interface{}, fields []Field) interface{} {
-	if len(fields) == 0 {
-		return m
-	}
-
-	if _, ok := m.(map[string]interface{})["fields"]; !ok {
-		m.(map[string]interface{})["fields"] = map[string]interface{}{}
-	}
-
-	a, ok := m.(map[string]interface{})["fields"].(map[string]interface{})
-	if !ok {
-		log.Fatal("failed to parse fields struct")
-	}
-	for _, f := range fields {
-		a[f.Key] = f.Val
-	}
-
-	return a
 }
 
 func sendSyslogLogs(ip string, mylog JsonLogs) {
