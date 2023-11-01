@@ -1,0 +1,10 @@
+{
+    "sources":[
+
+        {"name":"windows68","proto" :"beats","port":15044,"tls":false,"path":"./Logs/windows.json"},
+        {"name":"windows122","proto" :"beats","port":5044,"tls":false,"path":"./Logs/windows.json"},
+        {"name":"windows-tls","proto" :"beats","port":5044,"tls":true,"path":"./Logs/windows.json"},
+        {"name":"test-tcp","proto" :"tcp","port":8585,"tls":false,"path":"./Logs/test.log"},
+        {"name":"test-udp","proto" :"udp","port":8686,"tls":false,"path":"./Logs/test.log"}
+    ]
+}

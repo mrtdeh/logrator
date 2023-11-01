@@ -25,70 +25,59 @@ type JsonLogs struct {
 }
 
 type LogsMap map[string]JsonLogs
+type Field struct {
+	Key string
+	Val string
+}
 
 var (
 	dest, sources *string
 	ca, cert, key *string
 	inifity       *bool
 	delay         *int64
+	overwriteDate *bool
+	fields        *string
+	fieldsList    []Field
 
 	logsMap   LogsMap = make(LogsMap)
 	tlsConfig *tls.Config
+	SendDelay time.Duration
 )
 
-func init() {
-	logsMap = LogsMap{}
-
-	data, err := os.ReadFile("./logs.json")
-	if err != nil {
-		log.Fatal("logs.json not exist an current directory!")
-	}
-
-	var j map[string]interface{}
-	err = json.Unmarshal(data, &j)
+func main() {
+	err := loadSetting()
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	if sources, ok := j["sources"]; ok {
-		if ss, ok := sources.([]interface{}); ok {
-			for _, s := range ss {
-				tmp := s.(map[string]interface{})
-				logsMap[tmp["name"].(string)] = JsonLogs{
-					Name:     tmp["name"].(string),
-					Port:     int(tmp["port"].(float64)),
-					Protocol: tmp["proto"].(string),
-					Secure:   tmp["tls"].(bool),
-					Logs:     load(tmp["path"].(string)),
-				}
-			}
-		} else {
-			log.Fatal("parse failed : sources must be a array")
-		}
-	} else {
-		log.Fatal("parse failed : sources not found")
-	}
-
-}
-
-func main() {
-
-	dest = flag.String("c", "", "destination")
+	dest = flag.String("c", "", "destination address")
 	sources = flag.String("s", "", "sources")
 	inifity = flag.Bool("i", false, "inifity mode")
-	delay = flag.Int64("d", 1, "send delay")
-
-	ca = flag.String("ca", "", "ca")
-	cert = flag.String("cert", "", "cert")
-	key = flag.String("key", "", "key")
+	delay = flag.Int64("d", 0, "delay for each turn in inifity mode (miliseconds)")
+	overwriteDate = flag.Bool("overwrite-date", false, "overwrite date to now")
+	fields = flag.String("fields", "", "add field to log")
+	ca = flag.String("ca", "", "ca certificate")
+	cert = flag.String("cert", "", "cert certificate")
+	key = flag.String("key", "", "key certificate")
 	flag.Parse()
+
+	SendDelay = time.Duration(*delay) * time.Millisecond
 
 	var incs []string
 	if *sources != "" {
 		incs = strings.Split(*sources, ",")
 	}
+	if *fields != "" {
+		fl := strings.Split(*fields, ",")
+		for _, f := range fl {
+			kv := strings.Split(f, "=")
+			fieldsList = append(fieldsList, Field{
+				Key: kv[0],
+				Val: kv[1],
+			})
+		}
+	}
 
-	var err error
 	tlsConfig, err = tls_config.LoadTLSCredentials(tls_config.Config{
 		CAPath:   *ca,
 		CertPath: *cert,
@@ -123,21 +112,23 @@ func main() {
 }
 
 func sendBeatsLogs(ip string, mylog JsonLogs) {
+	// Address
 	addr := fmt.Sprintf("%s:%d", ip, mylog.Port)
-
+	// Default setting of conenction
 	lconf := lumber.Config{
 		Addr:          addr,
 		CompressLevel: 3,
 		Timeout:       30 * time.Second,
 		BatchSize:     1,
 	}
+	// Enable TLS if requested
 	if mylog.Secure {
 		if tlsConfig == nil {
 			log.Fatalf("you want to use tls for %s but not specified certs/keys", mylog.Name)
 		}
 		lconf.TLSConfig = tlsConfig
 	}
-
+	// Create connection
 	lc, err := lumber.NewClient(lconf)
 	if err != nil {
 		log.Fatalf("Failed to connect to Beat: %v", err)
@@ -146,21 +137,50 @@ func sendBeatsLogs(ip string, mylog JsonLogs) {
 
 	for {
 		for _, msg := range mylog.Logs {
-
-			payload := []interface{}{lumber.M2(msg)}
+			// Convert message to beat log
+			m := lumber.M2(msg)
+			// Overwrite timestamp field
+			dateNow := time.Now().Format("2006-01-02T15:04:05")
+			if _, ok := m.(map[string]interface{})["@timestamp"]; ok {
+				m.(map[string]interface{})["@timestamp"] = dateNow
+			} else {
+				log.Fatal("@timestampe field not found in the json to overwrite")
+			}
+			// Send payload data
+			payload := []interface{}{m}
 			err := lc.Send(payload)
 			if err != nil {
 				log.Fatalf("Failed to send log to Beat: %v", err)
 			}
 		}
 		log.Printf("send %d logs from datasource %s to server %s", len(mylog.Logs), mylog.Name, addr)
-		time.Sleep(time.Second)
+		time.Sleep(SendDelay)
 
 		if !*inifity {
 			break
 		}
 	}
 
+}
+
+func addFields(m interface{}, fields []Field) interface{} {
+	if len(fields) == 0 {
+		return m
+	}
+
+	if _, ok := m.(map[string]interface{})["fields"]; !ok {
+		m.(map[string]interface{})["fields"] = map[string]interface{}{}
+	}
+
+	a, ok := m.(map[string]interface{})["fields"].(map[string]interface{})
+	if !ok {
+		log.Fatal("failed to parse fields struct")
+	}
+	for _, f := range fields {
+		a[f.Key] = f.Val
+	}
+
+	return a
 }
 
 func sendSyslogLogs(ip string, mylog JsonLogs) {
@@ -187,10 +207,9 @@ func sendSyslogLogs(ip string, mylog JsonLogs) {
 			if err != nil {
 				log.Fatalf("Failed to send log to Beat: %v", err)
 			}
-
 		}
 		log.Printf("send %d logs from datasource %s to server %s", len(mylog.Logs), mylog.Name, addr)
-		time.Sleep(time.Second)
+		time.Sleep(SendDelay)
 
 		if !*inifity {
 			break
@@ -213,4 +232,41 @@ func send(ip string, log JsonLogs) {
 	} else if log.Protocol == "beats" {
 		sendBeatsLogs(ip, log)
 	}
+}
+
+func loadSetting() error {
+	logsMap = LogsMap{}
+
+	data, err := os.ReadFile("./sources.json")
+	if err != nil {
+		return fmt.Errorf("sources.json not exist an current directory!")
+	}
+
+	var j map[string]interface{}
+	err = json.Unmarshal(data, &j)
+	if err != nil {
+		return err
+	}
+
+	if sources, ok := j["sources"]; ok {
+		if ss, ok := sources.([]interface{}); ok {
+			for _, s := range ss {
+				tmp := s.(map[string]interface{})
+				logsMap[tmp["name"].(string)] = JsonLogs{
+					Name:     tmp["name"].(string),
+					Port:     int(tmp["port"].(float64)),
+					Protocol: tmp["proto"].(string),
+					Secure:   tmp["tls"].(bool),
+					Logs:     load(tmp["path"].(string)),
+				}
+			}
+		} else {
+			return fmt.Errorf("parse failed : sources must be a array")
+		}
+	} else {
+		return fmt.Errorf("parse failed : sources not found")
+	}
+
+	return nil
+
 }
