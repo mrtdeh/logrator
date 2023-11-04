@@ -23,7 +23,7 @@ type JsonLogs struct {
 	Name     string `yaml:"name"`
 	Port     int    `yaml:"port"`
 	Protocol string `yaml:"proto"`
-	Secure   bool   `yaml:"tls"`
+	Secure   bool   `yaml:"ssl"`
 	Path     string `yaml:"path"`
 
 	CA   string `yaml:"ssl_ca"`

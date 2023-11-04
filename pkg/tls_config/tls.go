@@ -34,7 +34,7 @@ func LoadTLSCredentials(opt Config) (*tls.Config, error) {
 	// Load certificate of the CA who signed server's certificate
 	pemServerCA, err := os.ReadFile(ca)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("path %s - %s", ca, err.Error())
 	}
 	certPool := x509.NewCertPool()
 	if !certPool.AppendCertsFromPEM(pemServerCA) {

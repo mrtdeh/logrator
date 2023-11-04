@@ -12,12 +12,12 @@ default:
 # list of sources
 sources:
   - name: windows
-    port: 5044
+    port: 15044
     proto: beats
     path: ./Logs/windows.json
 
   - name: windows-tls
-    port: 15044
+    port: 5044
     ssl: true
     ssl_ca: /opt/certs/ca.crt
     ssl_cert: /opt/certs/logstash.crt

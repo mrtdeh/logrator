@@ -35,8 +35,8 @@ func main() {
 	delay = flag.Int64("d", 0, "delay for each turn in inifity mode (miliseconds)")
 	threads = flag.Int("t", 1, "threads count")
 
-	showSources = flag.Bool("show-sources", false, "show sources list")
-	editSources = flag.Bool("edit-sources", false, "edit sources")
+	showSources = flag.Bool("show", false, "show sources list")
+	editSources = flag.Bool("edit", false, "edit sources")
 
 	ca = flag.String("ca", "", "ca certificate")
 	cert = flag.String("cert", "", "cert certificate")
