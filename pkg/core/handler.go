@@ -142,7 +142,8 @@ func (c *Config) sendBeatsLogs(mylog JsonLogs) {
 	// Create connection
 	lc, err := lumber.NewClient(lconf)
 	if err != nil {
-		log.Fatalf("Failed to connect to Beat: %v", err)
+		log.Println("Failed to connect to Beat: ", err.Error())
+		return
 	}
 	defer lc.Close()
 

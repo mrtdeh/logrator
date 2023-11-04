@@ -43,7 +43,6 @@ func NewClient(cnf Config) (*client, error) {
 		v2.Timeout(cnf.Timeout),
 	)
 	if err != nil {
-		log.Println(err)
 		return nil, err
 	}
 
