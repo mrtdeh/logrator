@@ -1,0 +1,26 @@
+name: "logrator"
+arch: "amd64"
+platform: "linux"
+version: ${VERSION}
+section: "default"
+priority: "extra"
+
+maintainer: "SIEM FARZAN"
+
+contents:
+  - src: ./bin/logrator
+    dst: /usr/share/logrator/logrator
+    file_info:
+      mode: 0655
+  - src: /usr/share/logrator/logrator
+    dst: /usr/bin/logrator
+    type: symlink
+  - src: ./Logs
+    dst: /usr/share/logrator/Logs
+  - src: ./sources.json
+    dst: /usr/share/logrator/sources.json
+
+
+
+scripts:
+    postinstall: ./packaging/debian/postinst
