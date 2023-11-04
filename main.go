@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/mrtdeh/testeps/pkg/core"
-	tls_config "github.com/mrtdeh/testeps/pkg/tls_config"
 )
 
 var (
@@ -18,7 +17,7 @@ var (
 	delay         *int64
 	threads       *int
 
-	showSources *bool
+	showSources, editSources *bool
 
 	tlsConfig *tls.Config
 	SendDelay time.Duration
@@ -37,6 +36,7 @@ func main() {
 	threads = flag.Int("t", 1, "threads count")
 
 	showSources = flag.Bool("show-sources", false, "show sources list")
+	editSources = flag.Bool("edit-sources", false, "edit sources")
 
 	ca = flag.String("ca", "", "ca certificate")
 	cert = flag.String("cert", "", "cert certificate")
@@ -47,24 +47,21 @@ func main() {
 		core.PrintSources()
 		return
 	}
-	SendDelay = time.Duration(*delay) * time.Millisecond
-	tlsConfig, err = tls_config.LoadTLSCredentials(tls_config.Config{
-		CAPath:   *ca,
-		CertPath: *cert,
-		KeyPath:  *key,
-	})
-	if err != nil {
-		// log.Println("tls config : ", err.Error())
+
+	if *editSources {
+		core.EditSources()
+		return
 	}
+	SendDelay = time.Duration(*delay) * time.Millisecond
 
 	var incs []string
 	if *sources != "" {
 		incs = strings.Split(*sources, ",")
 	}
 	core.Run(core.Config{
-		Sources:       incs,
-		SendDelay:     SendDelay,
-		TLSConfig:     tlsConfig,
+		Sources:   incs,
+		SendDelay: SendDelay,
+		// TLSConfig:     tlsConfig,
 		Inifity:       *inifity,
 		ThreadsCount:  *threads,
 		DestinationIp: *dest,

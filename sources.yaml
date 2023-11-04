@@ -1,0 +1,27 @@
+
+
+# default settings
+default:
+  # default path of ca for all sources
+  ssl_ca: ./certs/ca.crt
+  # default path of cert for all sources
+  ssl_cert: ./certs/logstash.crt
+  # default path of key for all sources
+  ssl_key: ./certs/logstash.key
+
+# list of sources
+sources:
+  - name: windows
+    port: 5044
+    proto: beats
+    path: ./Logs/windows.json
+
+  - name: windows-tls
+    port: 15044
+    ssl: true
+    ssl_ca: /opt/certs/ca.crt
+    ssl_cert: /opt/certs/logstash.crt
+    ssl_key: /opt/certs/logstash.key
+    proto: beats
+    path: ./Logs/windows.json
+

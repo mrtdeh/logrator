@@ -17,8 +17,8 @@ contents:
     type: symlink
   - src: ./Logs
     dst: /usr/share/logrator/Logs
-  - src: ./sources.json
-    dst: /usr/share/logrator/sources.json
+  - src: ./sources.yaml
+    dst: /usr/share/logrator/sources.yaml
 
 
 

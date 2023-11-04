@@ -2,27 +2,44 @@ package core
 
 import (
 	"crypto/tls"
-	"encoding/json"
 	"fmt"
 	"log"
 	"net"
 	"os"
+	"os/exec"
 	"sort"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/fatih/color"
+	"github.com/goccy/go-yaml"
 	"github.com/mrtdeh/testeps/pkg/lumber"
+	"github.com/mrtdeh/testeps/pkg/tls_config"
 	"github.com/rodaine/table"
 )
 
 type JsonLogs struct {
-	Name     string   `json:"name"`
-	Port     int      `json:"port"`
-	Protocol string   `json:"protocol"`
-	Secure   bool     `json:"tls"`
-	Logs     []string `json:"logs"`
+	Name     string `yaml:"name"`
+	Port     int    `yaml:"port"`
+	Protocol string `yaml:"proto"`
+	Secure   bool   `yaml:"tls"`
+	Path     string `yaml:"path"`
+
+	CA   string `yaml:"ssl_ca"`
+	Cert string `yaml:"ssl_cert"`
+	Key  string `yaml:"ssl_key"`
+
+	logs []string
+}
+
+type Sources struct {
+	Default struct {
+		CA   string `yaml:"ssl_ca"`
+		Cert string `yaml:"ssl_cert"`
+		Key  string `yaml:"ssl_key"`
+	} `yaml:"default"`
+	Sources []JsonLogs `yaml:"sources"`
 }
 
 type LogsMap map[string]JsonLogs
@@ -40,6 +57,44 @@ var (
 	logsMap LogsMap = make(LogsMap)
 )
 
+func LoadSetting() error {
+	logsMap = LogsMap{}
+
+	data, err := os.ReadFile("./sources.yaml")
+	if err != nil {
+		return fmt.Errorf("sources.yaml not exist an current directory!")
+	}
+
+	var j Sources
+	// err = json.Unmarshal(data, &j)
+	err = yaml.Unmarshal(data, &j)
+	if err != nil {
+		return err
+	}
+
+	if j.Sources != nil {
+		for _, s := range j.Sources {
+			s.logs = load(s.Path)
+			if s.CA == "" {
+				s.CA = j.Default.CA
+			}
+			if s.Cert == "" {
+				s.Cert = j.Default.Cert
+			}
+			if s.Key == "" {
+				s.Key = j.Default.Key
+			}
+
+			logsMap[s.Name] = s
+		}
+	} else {
+		return fmt.Errorf("parse failed : sources not found")
+	}
+
+	return nil
+
+}
+
 func Run(cnf Config) {
 	incs := cnf.Sources
 
@@ -56,7 +111,7 @@ func Run(cnf Config) {
 			go func(i string) {
 				// var count int
 				defer wg.Done()
-				for j := 0; j <= cnf.ThreadsCount; j++ {
+				for j := 0; j < cnf.ThreadsCount; j++ {
 					wg.Add(1)
 					go func() {
 						defer wg.Done()
@@ -95,7 +150,7 @@ func (c *Config) sendBeatsLogs(mylog JsonLogs) {
 	defer lc.Close()
 
 	for {
-		for _, msg := range mylog.Logs {
+		for _, msg := range mylog.logs {
 			// Convert message to beat log
 			m := lumber.M2(msg)
 			// Overwrite timestamp field
@@ -112,7 +167,7 @@ func (c *Config) sendBeatsLogs(mylog JsonLogs) {
 				log.Fatalf("Failed to send log to Beat: %v", err)
 			}
 		}
-		log.Printf("send %d logs from datasource %s to server %s", len(mylog.Logs), mylog.Name, addr)
+		log.Printf("send %d logs from datasource %s to server %s", len(mylog.logs), mylog.Name, addr)
 		time.Sleep(c.SendDelay)
 
 		if !*&c.Inifity {
@@ -141,13 +196,13 @@ func (c *Config) sendSyslogLogs(mylog JsonLogs) {
 	defer conn.Close()
 
 	for {
-		for _, msg := range mylog.Logs {
+		for _, msg := range mylog.logs {
 			_, err := fmt.Fprintln(conn, msg)
 			if err != nil {
 				log.Fatalf("Failed to send log to Beat: %v", err)
 			}
 		}
-		log.Printf("send %d logs from datasource %s to server %s", len(mylog.Logs), mylog.Name, addr)
+		log.Printf("send %d logs from datasource %s to server %s", len(mylog.logs), mylog.Name, addr)
 		time.Sleep(c.SendDelay)
 
 		if !*&c.Inifity {
@@ -156,11 +211,21 @@ func (c *Config) sendSyslogLogs(mylog JsonLogs) {
 	}
 }
 
-func (c *Config) send(log JsonLogs) {
-	if log.Protocol == "tcp" || log.Protocol == "udp" {
-		c.sendSyslogLogs(log)
-	} else if log.Protocol == "beats" {
-		c.sendBeatsLogs(log)
+func (c *Config) send(mylog JsonLogs) {
+	tlsConfig, err := tls_config.LoadTLSCredentials(tls_config.Config{
+		CAPath:   mylog.CA,
+		CertPath: mylog.Cert,
+		KeyPath:  mylog.Key,
+	})
+	if err != nil {
+		log.Fatal("tls config : ", err.Error())
+	}
+	c.TLSConfig = tlsConfig
+
+	if mylog.Protocol == "tcp" || mylog.Protocol == "udp" {
+		c.sendSyslogLogs(mylog)
+	} else if mylog.Protocol == "beats" {
+		c.sendBeatsLogs(mylog)
 	}
 }
 
@@ -171,43 +236,6 @@ func load(path string) []string {
 	}
 	lines := strings.Split(string(data), "\n")
 	return lines
-}
-
-func LoadSetting() error {
-	logsMap = LogsMap{}
-
-	data, err := os.ReadFile("./sources.json")
-	if err != nil {
-		return fmt.Errorf("sources.json not exist an current directory!")
-	}
-
-	var j map[string]interface{}
-	err = json.Unmarshal(data, &j)
-	if err != nil {
-		return err
-	}
-
-	if sources, ok := j["sources"]; ok {
-		if ss, ok := sources.([]interface{}); ok {
-			for _, s := range ss {
-				tmp := s.(map[string]interface{})
-				logsMap[tmp["name"].(string)] = JsonLogs{
-					Name:     tmp["name"].(string),
-					Port:     int(tmp["port"].(float64)),
-					Protocol: tmp["proto"].(string),
-					Secure:   tmp["tls"].(bool),
-					Logs:     load(tmp["path"].(string)),
-				}
-			}
-		} else {
-			return fmt.Errorf("parse failed : sources must be a array")
-		}
-	} else {
-		return fmt.Errorf("parse failed : sources not found")
-	}
-
-	return nil
-
 }
 
 func PrintSources() {
@@ -230,8 +258,35 @@ func PrintSources() {
 		if v.Secure {
 			s = "Yes"
 		}
-		tbl.AddRow(v.Name, v.Protocol, v.Port, s, len(v.Logs))
+		tbl.AddRow(v.Name, v.Protocol, v.Port, s, len(v.logs))
 	}
 
 	tbl.Print()
+}
+
+func EditSources() error {
+	fpath := "/usr/share/logrator/sources.yaml"
+	f, err := os.Open(fpath)
+	if err != nil {
+		log.Fatal(err)
+	}
+	f.Close()
+
+	cmd := exec.Command("nano", fpath)
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	err = cmd.Start()
+	if err != nil {
+		log.Fatal(err)
+	}
+	err = cmd.Wait()
+	if err != nil {
+		log.Printf("Error while editing. Error: %v\n", err)
+	} else {
+		log.Printf("Successfully edited.")
+	}
+
+	return nil
+
 }
