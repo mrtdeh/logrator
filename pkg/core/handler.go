@@ -212,15 +212,20 @@ func (c *Config) sendSyslogLogs(mylog JsonLogs) {
 }
 
 func (c *Config) send(mylog JsonLogs) {
-	tlsConfig, err := tls_config.LoadTLSCredentials(tls_config.Config{
-		CAPath:   mylog.CA,
-		CertPath: mylog.Cert,
-		KeyPath:  mylog.Key,
-	})
-	if err != nil {
-		log.Fatal("tls config : ", err.Error())
+	var tlsConfig *tls.Config
+	var err error
+
+	if mylog.Secure {
+		tlsConfig, err = tls_config.LoadTLSCredentials(tls_config.Config{
+			CAPath:   mylog.CA,
+			CertPath: mylog.Cert,
+			KeyPath:  mylog.Key,
+		})
+		if err != nil {
+			log.Fatal("tls config : ", err.Error())
+		}
+		c.TLSConfig = tlsConfig
 	}
-	c.TLSConfig = tlsConfig
 
 	if mylog.Protocol == "tcp" || mylog.Protocol == "udp" {
 		c.sendSyslogLogs(mylog)
