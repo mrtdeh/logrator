@@ -68,5 +68,12 @@ func M2(body string) interface{} {
 		log.Fatal(err)
 	}
 
+	dateNow := time.Now().Format("2006-01-02T15:04:05")
+	// if _, ok := res["@timestamp"]; ok {
+	res["@timestamp"] = dateNow
+	// } else {
+	// 	log.Fatal("@timestampe field not found in the json to overwrite")
+	// }
+
 	return res
 }

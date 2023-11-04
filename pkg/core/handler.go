@@ -137,9 +137,6 @@ func (c *Config) sendBeatsLogs(mylog JsonLogs) {
 	}
 	// Enable TLS if requested
 	if mylog.Secure {
-		if c.TLSConfig == nil {
-			log.Fatalf("you want to use tls for %s but not specified certs/keys", mylog.Name)
-		}
 		lconf.TLSConfig = c.TLSConfig
 	}
 	// Create connection
@@ -152,16 +149,8 @@ func (c *Config) sendBeatsLogs(mylog JsonLogs) {
 	for {
 		for _, msg := range mylog.logs {
 			// Convert message to beat log
-			m := lumber.M2(msg)
-			// Overwrite timestamp field
-			dateNow := time.Now().Format("2006-01-02T15:04:05")
-			if _, ok := m.(map[string]interface{})["@timestamp"]; ok {
-				m.(map[string]interface{})["@timestamp"] = dateNow
-			} else {
-				log.Fatal("@timestampe field not found in the json to overwrite")
-			}
+			payload := []interface{}{lumber.M2(msg)}
 			// Send payload data
-			payload := []interface{}{m}
 			err := lc.Send(payload)
 			if err != nil {
 				log.Fatalf("Failed to send log to Beat: %v", err)
@@ -183,9 +172,6 @@ func (c *Config) sendSyslogLogs(mylog JsonLogs) {
 	addr := fmt.Sprintf("%s:%d", c.DestinationIp, mylog.Port)
 
 	if mylog.Secure {
-		if c.TLSConfig == nil {
-			log.Fatalf("you want to use tls for %s but not specified certs/keys", mylog.Name)
-		}
 		conn, err = tls.Dial(mylog.Protocol, addr, c.TLSConfig)
 	} else {
 		conn, err = net.Dial(mylog.Protocol, addr)
