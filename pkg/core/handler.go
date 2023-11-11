@@ -66,7 +66,6 @@ func LoadSetting() error {
 	}
 
 	var j Sources
-	// err = json.Unmarshal(data, &j)
 	err = yaml.Unmarshal(data, &j)
 	if err != nil {
 		return err
@@ -149,6 +148,9 @@ func (c *Config) sendBeatsLogs(mylog JsonLogs) {
 
 	for {
 		for _, msg := range mylog.logs {
+			if strings.Trim(msg, " ") == "" {
+				continue
+			}
 			// Convert message to beat log
 			payload := []interface{}{lumber.M2(msg)}
 			// Send payload data

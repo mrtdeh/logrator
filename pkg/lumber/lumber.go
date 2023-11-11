@@ -64,7 +64,7 @@ func M2(body string) interface{} {
 	var res map[string]interface{}
 	err := json.Unmarshal([]byte(body), &res)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal("error in unmarshal winlog : ", err.Error())
 	}
 
 	dateNow := time.Now().Format("2006-01-02T15:04:05")
