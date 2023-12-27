@@ -60,7 +60,7 @@ var (
 func LoadSetting() error {
 	logsMap = LogsMap{}
 
-	data, err := os.ReadFile("./sources.yaml")
+	data, err := os.ReadFile("/usr/share/logrator/sources.yaml")
 	if err != nil {
 		return fmt.Errorf("sources.yaml not exist an current directory!")
 	}

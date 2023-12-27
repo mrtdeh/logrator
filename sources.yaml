@@ -14,7 +14,7 @@ sources:
   - name: windows
     port: 15044
     proto: beats
-    path: ./Logs/windows.json
+    path: /usr/share/logrator/Logs/windows.json
 
   - name: windows-tls
     port: 5044
@@ -23,5 +23,5 @@ sources:
     ssl_cert: /opt/certs/logstash.crt
     ssl_key: /opt/certs/logstash.key
     proto: beats
-    path: ./Logs/windows.json
+    path: /usr/share/logrator/Logs/windows.json
 
