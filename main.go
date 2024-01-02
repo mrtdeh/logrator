@@ -12,6 +12,7 @@ import (
 
 var (
 	dest, sources *string
+	dstport       *int
 	inifity       *bool
 	delay         *int64
 	threads       *int
@@ -29,7 +30,8 @@ func main() {
 	}
 
 	// switchs
-	dest = flag.String("c", "", "destination address")
+	dest = flag.String("h", "", "destination host/ip")
+	dstport = flag.Int("p", 0, "destination port")
 	sources = flag.String("s", "", "sources")
 	inifity = flag.Bool("i", false, "inifity mode")
 	delay = flag.Int64("d", 0, "delay for each turn in inifity mode (miliseconds)")
@@ -54,10 +56,11 @@ func main() {
 		incs = strings.Split(*sources, ",")
 	}
 	core.Run(core.Config{
-		DestinationIp: *dest,
-		Sources:       incs,
-		SendDelay:     time.Duration(*delay) * time.Millisecond,
-		Inifity:       *inifity,
-		ThreadsCount:  *threads,
+		DestinationIp:   *dest,
+		DestinationPort: *dstport,
+		Sources:         incs,
+		SendDelay:       time.Duration(*delay) * time.Millisecond,
+		Inifity:         *inifity,
+		ThreadsCount:    *threads,
 	})
 }

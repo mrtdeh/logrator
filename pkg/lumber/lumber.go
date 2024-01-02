@@ -20,6 +20,7 @@ type Config struct {
 
 type client struct {
 	conn *v2.Client
+	cnf  Config
 }
 
 func (c *client) Send(batch []interface{}) error {
@@ -27,6 +28,27 @@ func (c *client) Send(batch []interface{}) error {
 	if err != nil {
 		return err
 	}
+	return nil
+}
+
+func (c *client) ReDial() error {
+	err := c.Close()
+	if err != nil {
+		return err
+	}
+
+	newConn, err := v2.DialWith(func(network, address string) (net.Conn, error) {
+		if c.cnf.TLSConfig != nil {
+			return tls.Dial(network, address, c.cnf.TLSConfig)
+		}
+		return net.Dial(network, address)
+	}, c.cnf.Addr, v2.CompressionLevel(c.cnf.CompressLevel), v2.Timeout(c.cnf.Timeout))
+	if err != nil {
+		return err
+	}
+
+	c.conn = newConn
+
 	return nil
 }
 func (c *client) Close() error {
@@ -46,7 +68,7 @@ func NewClient(cnf Config) (*client, error) {
 		return nil, err
 	}
 
-	return &client{cl}, nil
+	return &client{cl, cnf}, nil
 }
 
 func M(msg string) interface{} {

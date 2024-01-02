@@ -45,12 +45,13 @@ type Sources struct {
 type LogsMap map[string]JsonLogs
 
 type Config struct {
-	Sources       []string
-	SendDelay     time.Duration
-	TLSConfig     *tls.Config
-	Inifity       bool
-	ThreadsCount  int
-	DestinationIp string
+	Sources         []string
+	SendDelay       time.Duration
+	TLSConfig       *tls.Config
+	Inifity         bool
+	ThreadsCount    int
+	DestinationIp   string
+	DestinationPort int
 }
 
 var (
@@ -108,7 +109,6 @@ func Run(cnf Config) {
 		if log, ok := logsMap[i]; ok {
 			wg.Add(1)
 			go func(i string) {
-				// var count int
 				defer wg.Done()
 				for j := 0; j < cnf.ThreadsCount; j++ {
 					wg.Add(1)
@@ -125,13 +125,17 @@ func Run(cnf Config) {
 }
 
 func (c *Config) sendBeatsLogs(mylog JsonLogs) {
+	port := mylog.Port
+	if c.DestinationPort != 0 {
+		port = c.DestinationPort
+	}
 	// Address
-	addr := fmt.Sprintf("%s:%d", c.DestinationIp, mylog.Port)
+	addr := fmt.Sprintf("%s:%d", c.DestinationIp, port)
 	// Default setting of conenction
 	lconf := lumber.Config{
 		Addr:          addr,
 		CompressLevel: 3,
-		Timeout:       30 * time.Second,
+		Timeout:       5 * time.Second,
 		BatchSize:     1,
 	}
 	// Enable TLS if requested
@@ -156,13 +160,19 @@ func (c *Config) sendBeatsLogs(mylog JsonLogs) {
 			// Send payload data
 			err := lc.Send(payload)
 			if err != nil {
-				log.Fatalf("Failed to send log to Beat: %v", err)
+				log.Printf("Failed to send log to Beat: %v\n", err)
+				if err := lc.ReDial(); err != nil {
+					log.Println("error in redial : ", err.Error())
+					time.Sleep(time.Second * 2)
+				}
+				log.Println("re-connect to server ", addr)
+				continue
 			}
 		}
 		log.Printf("send %d logs from datasource %s to server %s", len(mylog.logs), mylog.Name, addr)
 		time.Sleep(c.SendDelay)
 
-		if !*&c.Inifity {
+		if !c.Inifity {
 			break
 		}
 	}
@@ -188,13 +198,13 @@ func (c *Config) sendSyslogLogs(mylog JsonLogs) {
 		for _, msg := range mylog.logs {
 			_, err := fmt.Fprintln(conn, msg)
 			if err != nil {
-				log.Fatalf("Failed to send log to Beat: %v", err)
+				log.Fatalf("Failed to send log to Syslog: %v", err)
 			}
 		}
 		log.Printf("send %d logs from datasource %s to server %s", len(mylog.logs), mylog.Name, addr)
 		time.Sleep(c.SendDelay)
 
-		if !*&c.Inifity {
+		if !c.Inifity {
 			break
 		}
 	}

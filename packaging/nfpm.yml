@@ -19,7 +19,7 @@ contents:
     dst: /usr/share/logrator/Logs
   - src: ./sources.yaml
     dst: /usr/share/logrator/sources.yaml
-
+    type: config|noreplace    
 
 
 scripts:
