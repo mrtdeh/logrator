@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"log"
 	"net"
+	"sync"
 	"time"
 
 	v2 "github.com/elastic/go-lumber/client/v2"
@@ -21,9 +22,13 @@ type Config struct {
 type client struct {
 	conn *v2.Client
 	cnf  Config
+	l    *sync.Mutex
 }
 
 func (c *client) Send(batch []interface{}) error {
+	c.l.Lock()
+	defer c.l.Unlock()
+
 	err := c.conn.Send(batch)
 	if err != nil {
 		return err
@@ -32,17 +37,15 @@ func (c *client) Send(batch []interface{}) error {
 }
 
 func (c *client) ReDial() error {
+	c.l.Lock()
+	defer c.l.Unlock()
+
 	err := c.Close()
 	if err != nil {
 		return err
 	}
 
-	newConn, err := v2.DialWith(func(network, address string) (net.Conn, error) {
-		if c.cnf.TLSConfig != nil {
-			return tls.Dial(network, address, c.cnf.TLSConfig)
-		}
-		return net.Dial(network, address)
-	}, c.cnf.Addr, v2.CompressionLevel(c.cnf.CompressLevel), v2.Timeout(c.cnf.Timeout))
+	newConn, err := dial(c.cnf)
 	if err != nil {
 		return err
 	}
@@ -56,19 +59,15 @@ func (c *client) Close() error {
 }
 
 func NewClient(cnf Config) (*client, error) {
-	cl, err := v2.DialWith(func(network, address string) (net.Conn, error) {
-		if cnf.TLSConfig != nil {
-			return tls.Dial(network, address, cnf.TLSConfig)
-		}
-		return net.Dial(network, address)
-	}, cnf.Addr, v2.CompressionLevel(cnf.CompressLevel),
-		v2.Timeout(cnf.Timeout),
-	)
+	cl, err := dial(cnf)
 	if err != nil {
-		return nil, err
+		log.Fatal(err)
 	}
-
-	return &client{cl, cnf}, nil
+	return &client{
+		cnf:  cnf,
+		conn: cl,
+		l:    &sync.Mutex{},
+	}, nil
 }
 
 func M(msg string) interface{} {
@@ -97,4 +96,19 @@ func M2(body string) interface{} {
 	// }
 
 	return res
+}
+
+func dial(cnf Config) (*v2.Client, error) {
+	cl, err := v2.DialWith(func(network, address string) (net.Conn, error) {
+		if cnf.TLSConfig != nil {
+			return tls.Dial(network, address, cnf.TLSConfig)
+		}
+		return net.Dial(network, address)
+	}, cnf.Addr, v2.CompressionLevel(cnf.CompressLevel),
+		v2.Timeout(cnf.Timeout),
+	)
+	if err != nil {
+		return nil, err
+	}
+	return cl, nil
 }
